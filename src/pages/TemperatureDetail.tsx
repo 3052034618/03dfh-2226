@@ -1,8 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Plus, Thermometer, Wifi, WifiOff, ClipboardCheck, QrCode } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { mockTemperatureRecords } from '@/data/mock'
 import TemperatureChart from '@/components/TemperatureChart'
 import CheckpointTimeline from '@/components/CheckpointTimeline'
 import CheckpointForm from '@/components/CheckpointForm'
@@ -18,8 +17,15 @@ export default function TemperatureDetail() {
   const checkpoints = useStore((s) => s.getCheckpointsForWaybill(waybillId || ''))
   const startTransit = useStore((s) => s.startTransit)
   const generateOrGetHandoverCode = useStore((s) => s.generateOrGetHandoverCode)
+  const getTemperatureRecords = useStore((s) => s.getTemperatureRecords)
 
-  const tempRecords = waybillId ? (mockTemperatureRecords[waybillId] || []) : []
+  const tempRecords = waybillId ? getTemperatureRecords(waybillId) : []
+
+  useEffect(() => {
+    if (waybillId) {
+      getTemperatureRecords(waybillId)
+    }
+  }, [waybillId, getTemperatureRecords])
 
   if (!waybill) {
     return (
@@ -36,9 +42,24 @@ export default function TemperatureDetail() {
     )
   }
 
-  const isNormal = tempRecords.length > 0
+  const lastTempNormal = tempRecords.length > 0
     ? tempRecords[tempRecords.length - 1].isNormal
     : waybill.currentTemp >= waybill.tempRange.min && waybill.currentTemp <= waybill.tempRange.max
+
+  const getStatusBadge = () => {
+    if (waybill.status === 'pending') {
+      if (waybill.deviceBound) {
+        return { text: '装车中', className: 'bg-cold-500/10 text-cold-600' }
+      }
+      return { text: '等待绑定', className: 'bg-slate-100 text-slate-500' }
+    }
+    if (lastTempNormal) {
+      return { text: '正常', className: 'bg-safe-500/10 text-safe-600' }
+    }
+    return { text: '超温', className: 'bg-warn-500/10 text-warn-600' }
+  }
+
+  const statusBadge = getStatusBadge()
 
   const handleStartTransit = () => {
     startTransit(waybill.id)
@@ -83,13 +104,9 @@ export default function TemperatureDetail() {
                 <Thermometer size={18} className="text-cold-400" />
               </div>
               <span
-                className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                  isNormal
-                    ? 'bg-safe-500/10 text-safe-600'
-                    : 'bg-warn-500/10 text-warn-600'
-                }`}
+                className={`text-xs px-2.5 py-1 rounded-full font-medium ${statusBadge.className}`}
               >
-                {isNormal ? '正常' : '超温'}
+                {statusBadge.text}
               </span>
             </div>
 

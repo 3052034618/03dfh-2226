@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ArrowLeft,
   CheckCircle2,
@@ -13,10 +13,11 @@ import {
   Camera,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
-import { mockTemperatureRecords, checkpointTypeLabels } from '@/data/mock'
+import { checkpointTypeLabels } from '@/data/mock'
 import HandoverChart from '@/components/HandoverChart'
 import SignOffPanel from '@/components/SignOffPanel'
 import HandoverCodeModal from '@/components/HandoverCodeModal'
+import AnomalyTrace from '@/components/AnomalyTrace'
 
 const checkpointIcons: Record<string, React.ReactNode> = {
   departure: <Truck className="w-4 h-4 text-cold-500" />,
@@ -34,8 +35,15 @@ export default function Handover() {
   const checkpoints = useStore((s) => s.getCheckpointsForWaybill(waybillId || ''))
   const handoverRecord = useStore((s) => (waybillId ? s.handoverRecords[waybillId] : undefined))
   const generateOrGetHandoverCode = useStore((s) => s.generateOrGetHandoverCode)
+  const getTemperatureRecords = useStore((s) => s.getTemperatureRecords)
 
-  const records = waybillId ? mockTemperatureRecords[waybillId] || [] : []
+  const records = waybillId ? getTemperatureRecords(waybillId) : []
+
+  useEffect(() => {
+    if (waybillId) {
+      getTemperatureRecords(waybillId)
+    }
+  }, [waybillId, getTemperatureRecords])
 
   if (!waybill) {
     return (
@@ -159,6 +167,13 @@ export default function Handover() {
             </div>
           </div>
         )}
+
+        <AnomalyTrace
+          waybillId={waybill.id}
+          temperatureRecords={records}
+          checkpoints={checkpoints}
+          handoverRecord={handoverRecord}
+        />
 
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <h2 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-1.5">

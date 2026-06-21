@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Snowflake, Thermometer } from 'lucide-react'
+import { Snowflake, Thermometer, Search } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import StatusTabs from '@/components/StatusTabs'
 import WaybillCard from '@/components/WaybillCard'
@@ -38,7 +38,16 @@ export default function WaybillList() {
             <Snowflake className="h-6 w-6 text-cold-300" />
             <h1 className="text-xl font-bold">冷链通</h1>
           </div>
-          <span className="text-sm text-cold-200">{dateStr}</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/verify')}
+              className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 rounded-full px-3 py-1.5 text-sm transition-colors"
+            >
+              <Search className="w-4 h-4" />
+              <span>收货查询</span>
+            </button>
+            <span className="text-sm text-cold-200">{dateStr}</span>
+          </div>
         </div>
       </header>
 

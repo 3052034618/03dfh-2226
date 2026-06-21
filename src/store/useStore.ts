@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Waybill, WaybillStatus, Checkpoint, HandoverRecord, AnomalyReason } from '@/types'
+import type { Waybill, WaybillStatus, Checkpoint, HandoverRecord, AnomalyReason, TemperatureRecord } from '@/types'
 import { mockWaybills, mockCheckpoints, mockHandoverRecords, mockTemperatureRecords } from '@/data/mock'
+import { generateTemperatureRecords } from '@/utils/tempGenerator'
+import { getInitialCheckpoints } from '@/utils/checkpointInit'
 
 function generateHandoverCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -16,6 +18,7 @@ interface AppState {
   waybills: Waybill[]
   checkpoints: Record<string, Checkpoint[]>
   handoverRecords: Record<string, HandoverRecord>
+  temperatureRecords: Record<string, TemperatureRecord[]>
   activeStatusFilter: WaybillStatus | 'all'
   bindingWaybillId: string | null
 
@@ -29,8 +32,10 @@ interface AppState {
   getWaybillById: (id: string) => Waybill | undefined
   getWaybillByHandoverCode: (code: string) => Waybill | undefined
   getCheckpointsForWaybill: (id: string) => Checkpoint[]
+  getTemperatureRecords: (waybillId: string) => TemperatureRecord[]
   getTemperatureHasOvershoot: (waybillId: string) => boolean
   generateOrGetHandoverCode: (waybillId: string) => string
+  getInitialCheckpointsForWaybill: (waybillId: string) => Checkpoint[]
 }
 
 const initialWaybills = mockWaybills.map((wb) => {
@@ -46,6 +51,7 @@ export const useStore = create<AppState>()(
       waybills: initialWaybills,
       checkpoints: mockCheckpoints,
       handoverRecords: mockHandoverRecords,
+      temperatureRecords: mockTemperatureRecords,
       activeStatusFilter: 'all',
       bindingWaybillId: null,
 
@@ -61,14 +67,18 @@ export const useStore = create<AppState>()(
         })),
 
       bindDevice: (waybillId, plate, deviceId) =>
-        set((state) => ({
-          waybills: state.waybills.map((w) =>
-            w.id === waybillId
-              ? { ...w, deviceBound: true, vehiclePlate: plate, deviceId, updatedAt: new Date().toISOString() }
-              : w
-          ),
-          bindingWaybillId: null,
-        })),
+        set((state) => {
+          const wb = state.waybills.find((w) => w.id === waybillId)
+          const code = wb?.handoverCode || generateHandoverCode()
+          return {
+            waybills: state.waybills.map((w) =>
+              w.id === waybillId
+                ? { ...w, deviceBound: true, vehiclePlate: plate, deviceId, handoverCode: code, updatedAt: new Date().toISOString() }
+                : w
+            ),
+            bindingWaybillId: null,
+          }
+        }),
 
       startTransit: (waybillId) =>
         set((state) => {
@@ -152,10 +162,37 @@ export const useStore = create<AppState>()(
 
       getWaybillByHandoverCode: (code) => get().waybills.find((w) => w.handoverCode === code),
 
-      getCheckpointsForWaybill: (id) => get().checkpoints[id] || [],
+      getCheckpointsForWaybill: (id) => {
+        const existing = get().checkpoints[id] || []
+        if (existing.length > 0) {
+          return existing
+        }
+        return get().getInitialCheckpointsForWaybill(id)
+      },
+
+      getTemperatureRecords: (waybillId) => {
+        const state = get()
+        const existing = state.temperatureRecords[waybillId]
+        if (existing && existing.length > 0) {
+          return existing
+        }
+        const waybill = state.getWaybillById(waybillId)
+        if (!waybill) {
+          return []
+        }
+        const records = generateTemperatureRecords(waybill)
+        set((s) => ({
+          temperatureRecords: {
+            ...s.temperatureRecords,
+            [waybillId]: records,
+          },
+        }))
+        state.getInitialCheckpointsForWaybill(waybillId)
+        return records
+      },
 
       getTemperatureHasOvershoot: (waybillId) => {
-        const records = mockTemperatureRecords[waybillId] || []
+        const records = get().getTemperatureRecords(waybillId)
         return records.some((r) => !r.isNormal)
       },
 
@@ -170,6 +207,28 @@ export const useStore = create<AppState>()(
         }))
         return code
       },
+
+      getInitialCheckpointsForWaybill: (waybillId) => {
+        const state = get()
+        const existing = state.checkpoints[waybillId] || []
+        if (existing.length > 0) {
+          return existing
+        }
+        const waybill = state.getWaybillById(waybillId)
+        if (!waybill) {
+          return []
+        }
+        const initialCheckpoints = getInitialCheckpoints(waybill)
+        if (initialCheckpoints.length > 0) {
+          set((s) => ({
+            checkpoints: {
+              ...s.checkpoints,
+              [waybillId]: initialCheckpoints,
+            },
+          }))
+        }
+        return initialCheckpoints
+      },
     }),
     {
       name: 'cold-chain-storage',
@@ -177,6 +236,7 @@ export const useStore = create<AppState>()(
         waybills: state.waybills,
         checkpoints: state.checkpoints,
         handoverRecords: state.handoverRecords,
+        temperatureRecords: state.temperatureRecords,
       }),
     }
   )
