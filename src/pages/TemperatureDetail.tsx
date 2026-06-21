@@ -1,20 +1,23 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Thermometer, Wifi, WifiOff, ClipboardCheck } from 'lucide-react'
+import { ArrowLeft, Plus, Thermometer, Wifi, WifiOff, ClipboardCheck, QrCode } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { mockTemperatureRecords } from '@/data/mock'
 import TemperatureChart from '@/components/TemperatureChart'
 import CheckpointTimeline from '@/components/CheckpointTimeline'
 import CheckpointForm from '@/components/CheckpointForm'
+import HandoverCodeModal from '@/components/HandoverCodeModal'
 
 export default function TemperatureDetail() {
   const { waybillId } = useParams<{ waybillId: string }>()
   const navigate = useNavigate()
   const [showForm, setShowForm] = useState(false)
+  const [showCodeModal, setShowCodeModal] = useState(false)
 
   const waybill = useStore((s) => s.getWaybillById(waybillId || ''))
   const checkpoints = useStore((s) => s.getCheckpointsForWaybill(waybillId || ''))
   const startTransit = useStore((s) => s.startTransit)
+  const generateOrGetHandoverCode = useStore((s) => s.generateOrGetHandoverCode)
 
   const tempRecords = waybillId ? (mockTemperatureRecords[waybillId] || []) : []
 
@@ -50,13 +53,22 @@ export default function TemperatureDetail() {
         </button>
         <span className="text-sm font-medium flex-1">{waybill.waybillNo}</span>
         {waybill.status === 'in_transit' && (
-          <button
-            onClick={() => navigate(`/handover/${waybill.id}`)}
-            className="text-xs bg-white/20 rounded-lg px-3 py-1.5 min-h-[36px] flex items-center gap-1"
-          >
-            <ClipboardCheck size={14} />
-            交接签收
-          </button>
+          <>
+            <button
+              onClick={() => setShowCodeModal(true)}
+              className="text-xs bg-white/20 rounded-lg px-2.5 py-1.5 min-h-[36px] flex items-center gap-1"
+            >
+              <QrCode size={14} />
+              交接码
+            </button>
+            <button
+              onClick={() => navigate(`/handover/${waybill.id}`)}
+              className="text-xs bg-white/20 rounded-lg px-3 py-1.5 min-h-[36px] flex items-center gap-1"
+            >
+              <ClipboardCheck size={14} />
+              交接签收
+            </button>
+          </>
         )}
       </header>
 
@@ -141,6 +153,14 @@ export default function TemperatureDetail() {
         <CheckpointForm
           waybillId={waybill.id}
           onClose={() => setShowForm(false)}
+        />
+      )}
+
+      {showCodeModal && (
+        <HandoverCodeModal
+          waybillId={waybill.id}
+          handoverCode={generateOrGetHandoverCode(waybill.id)}
+          onClose={() => setShowCodeModal(false)}
         />
       )}
     </div>

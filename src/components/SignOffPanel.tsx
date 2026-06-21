@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CheckCircle2, AlertTriangle } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, User } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 
 interface SignOffPanelProps {
@@ -14,6 +14,7 @@ export default function SignOffPanel({ waybillId }: SignOffPanelProps) {
   const [isSigning, setIsSigning] = useState(false)
   const [isSigned, setIsSigned] = useState(false)
   const [overshootNote, setOvershootNote] = useState('')
+  const [signerName, setSignerName] = useState('当前用户（收货）')
 
   const hasOvershoot = getTemperatureHasOvershoot(waybillId)
 
@@ -21,7 +22,7 @@ export default function SignOffPanel({ waybillId }: SignOffPanelProps) {
 
   if (record || isSigned) {
     const signedAt = record?.signedAt ?? new Date().toISOString()
-    const signerName = record?.signerName ?? '当前用户（收货）'
+    const displaySignerName = record?.signerName ?? signerName
     return (
       <div className="text-center">
         <style>{`
@@ -39,7 +40,7 @@ export default function SignOffPanel({ waybillId }: SignOffPanelProps) {
             />
           </div>
           <p className="text-lg font-semibold text-safe-600">已签收</p>
-          <p className="text-sm text-slate-500 mt-1">签收人：{signerName}</p>
+          <p className="text-sm text-slate-500 mt-1">签收人：{displaySignerName}</p>
           <p className="text-xs text-slate-400 mt-0.5">
             {new Date(signedAt).toLocaleString('zh-CN')}
           </p>
@@ -51,11 +52,27 @@ export default function SignOffPanel({ waybillId }: SignOffPanelProps) {
   const handleSign = () => {
     setIsSigning(true)
     setTimeout(() => {
-      signHandover(waybillId, '当前用户（收货）', hasOvershoot ? overshootNote : undefined)
+      signHandover(waybillId, signerName, hasOvershoot ? overshootNote : undefined)
       setIsSigning(false)
       setIsSigned(true)
     }, 800)
   }
+
+  const signerInput = (
+    <div className="mb-3">
+      <label className="text-xs text-slate-500 mb-1.5 block">签收人姓名</label>
+      <div className="relative">
+        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-cold-400 focus:ring-1 focus:ring-cold-400"
+          placeholder="请输入签收人姓名"
+          value={signerName}
+          onChange={(e) => setSignerName(e.target.value)}
+        />
+      </div>
+    </div>
+  )
 
   return (
     <div>
@@ -63,6 +80,7 @@ export default function SignOffPanel({ waybillId }: SignOffPanelProps) {
 
       {hasOvershoot && (
         <>
+          {signerInput}
           <div className="flex items-start gap-2 bg-warn-50 border border-warn-400/30 rounded-xl p-3 mb-3">
             <AlertTriangle className="w-5 h-5 text-warn-500 shrink-0 mt-0.5" />
             <p className="text-sm text-warn-600">检测到超温记录，请补充说明</p>
@@ -75,7 +93,7 @@ export default function SignOffPanel({ waybillId }: SignOffPanelProps) {
           />
           <button
             className="w-full mt-3 bg-warn-500 hover:bg-warn-600 text-white font-semibold rounded-xl min-h-[52px] disabled:opacity-50 transition-colors"
-            disabled={isSigning || !overshootNote.trim()}
+            disabled={isSigning || !overshootNote.trim() || !signerName.trim()}
             onClick={handleSign}
           >
             {isSigning ? '签收中...' : '补充说明并签收'}
@@ -84,13 +102,16 @@ export default function SignOffPanel({ waybillId }: SignOffPanelProps) {
       )}
 
       {!hasOvershoot && (
-        <button
-          className="w-full bg-safe-500 hover:bg-safe-600 text-white font-semibold rounded-xl min-h-[52px] disabled:opacity-50 transition-colors"
-          disabled={isSigning}
-          onClick={handleSign}
-        >
-          {isSigning ? '签收中...' : '确认签收'}
-        </button>
+        <>
+          {signerInput}
+          <button
+            className="w-full bg-safe-500 hover:bg-safe-600 text-white font-semibold rounded-xl min-h-[52px] disabled:opacity-50 transition-colors"
+            disabled={isSigning || !signerName.trim()}
+            onClick={handleSign}
+          >
+            {isSigning ? '签收中...' : '确认签收'}
+          </button>
+        </>
       )}
     </div>
   )

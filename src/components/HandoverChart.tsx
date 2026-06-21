@@ -14,6 +14,7 @@ const CHECKPOINT_COLORS: Record<string, string> = {
   departure: '#0ea5e9',
   anomaly: '#f97316',
   arrival: '#22c55e',
+  photo: '#0ea5e9',
 }
 
 export default function HandoverChart({ records, tempRange, checkpoints }: HandoverChartProps) {
@@ -39,7 +40,7 @@ export default function HandoverChart({ records, tempRange, checkpoints }: Hando
 
   const linePoints = records.map((r, i) => `${mapX(i)},${mapY(r.temperature)}`).join(' ')
 
-  const markerTypes = ['departure', 'anomaly', 'arrival']
+  const markerTypes = ['departure', 'anomaly', 'arrival', 'photo']
   const markerCheckpoints = checkpoints
     .filter((cp) => markerTypes.includes(cp.type))
     .map((cp) => {

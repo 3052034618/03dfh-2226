@@ -79,8 +79,21 @@ export default function CheckpointTimeline({ checkpoints }: CheckpointTimelinePr
             )}
 
             {cp.type === 'photo' && (
-              <div className="mt-2 h-20 bg-slate-100 rounded-xl flex items-center justify-center">
-                <Camera size={24} className="text-slate-300" />
+              <div className="mt-2">
+                {cp.photo ? (
+                  <img
+                    src={cp.photo}
+                    alt="现场照片"
+                    className="w-full h-28 object-cover rounded-xl opacity-0 animate-fade-in"
+                    onLoad={(e) => {
+                      e.currentTarget.classList.remove('opacity-0')
+                    }}
+                  />
+                ) : (
+                  <div className="h-28 bg-slate-100 rounded-xl flex items-center justify-center">
+                    <Camera size={24} className="text-slate-300" />
+                  </div>
+                )}
               </div>
             )}
           </div>

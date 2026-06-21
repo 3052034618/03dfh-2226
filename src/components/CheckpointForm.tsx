@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Camera, FileText, AlertTriangle, MapPin } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Camera, FileText, AlertTriangle, MapPin, Upload } from 'lucide-react'
 import type { CheckpointType, AnomalyReason } from '@/types'
 import { anomalyReasonLabels } from '@/data/mock'
 import { useStore } from '@/store/useStore'
@@ -23,7 +23,40 @@ export default function CheckpointForm({ waybillId, onClose }: CheckpointFormPro
   const [selectedType, setSelectedType] = useState<CheckpointType | null>(null)
   const [anomalyReason, setAnomalyReason] = useState<AnomalyReason | null>(null)
   const [note, setNote] = useState('')
+  const [photo, setPhoto] = useState<string | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const addCheckpoint = useStore((s) => s.addCheckpoint)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const result = reader.result as string
+        setPhoto(result)
+        setPhotoPreview(result)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleSimulatePhoto = async () => {
+    try {
+      const url = 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=refrigerated%20truck%20on%20highway%2C%20temperature%20display%20inside%20cargo%20area%2C%20cold%20chain%20logistics&image_size=square'
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const result = reader.result as string
+        setPhoto(result)
+        setPhotoPreview(result)
+      }
+      reader.readAsDataURL(blob)
+    } catch (error) {
+      console.error('Failed to generate photo:', error)
+    }
+  }
 
   const handleSubmit = () => {
     if (!selectedType) return
@@ -33,6 +66,7 @@ export default function CheckpointForm({ waybillId, onClose }: CheckpointFormPro
       location: '当前路段 - GPS定位中',
       note: note || undefined,
       anomalyReason: selectedType === 'anomaly' ? anomalyReason! : undefined,
+      photo: selectedType === 'photo' ? photo || undefined : undefined,
     })
     onClose()
   }
@@ -83,6 +117,41 @@ export default function CheckpointForm({ waybillId, onClose }: CheckpointFormPro
             </div>
           )}
 
+          {selectedType === 'photo' && (
+            <div className="mb-3">
+              <div className="flex gap-2 mb-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 bg-slate-100 text-slate-600 rounded-xl min-h-[44px] text-sm font-medium flex items-center justify-center gap-2"
+                >
+                  <Upload size={18} />
+                  选择照片
+                </button>
+                <button
+                  onClick={handleSimulatePhoto}
+                  className="flex-1 bg-cold-50 text-cold-600 rounded-xl min-h-[44px] text-sm font-medium flex items-center justify-center gap-2"
+                >
+                  <Camera size={18} />
+                  模拟拍照
+                </button>
+              </div>
+              {photoPreview && (
+                <img
+                  src={photoPreview}
+                  alt="照片预览"
+                  className="w-full max-h-40 object-cover rounded-xl"
+                />
+              )}
+            </div>
+          )}
+
           {selectedType && selectedType !== 'photo' && (
             <textarea
               value={note}
@@ -106,7 +175,11 @@ export default function CheckpointForm({ waybillId, onClose }: CheckpointFormPro
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!selectedType || (selectedType === 'anomaly' && !anomalyReason)}
+              disabled={
+                !selectedType ||
+                (selectedType === 'anomaly' && !anomalyReason) ||
+                (selectedType === 'photo' && !photo)
+              }
               className="flex-1 bg-cold-500 text-white rounded-xl min-h-[48px] text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
             >
               提交

@@ -9,8 +9,9 @@ import {
   Thermometer,
   Truck,
   FileCheck,
-  QrCode,
   Camera,
+  QrCode,
+  RefreshCw,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { mockTemperatureRecords, checkpointTypeLabels } from '@/data/mock'
@@ -25,22 +26,48 @@ const checkpointIcons: Record<string, React.ReactNode> = {
   photo: <Camera className="w-4 h-4 text-sky-500" />,
 }
 
-export default function Handover() {
-  const { waybillId } = useParams<{ waybillId: string }>()
+export default function HandoverView() {
+  const { handoverCode } = useParams<{ handoverCode: string }>()
   const navigate = useNavigate()
   const [showCodeModal, setShowCodeModal] = useState(false)
 
-  const waybill = useStore((s) => s.getWaybillById(waybillId || ''))
-  const checkpoints = useStore((s) => s.getCheckpointsForWaybill(waybillId || ''))
-  const handoverRecord = useStore((s) => (waybillId ? s.handoverRecords[waybillId] : undefined))
+  const waybill = useStore((s) => s.getWaybillByHandoverCode(handoverCode || ''))
+  const checkpoints = useStore((s) =>
+    waybill ? s.getCheckpointsForWaybill(waybill.id) : []
+  )
+  const handoverRecord = useStore((s) =>
+    waybill ? s.handoverRecords[waybill.id] : undefined
+  )
   const generateOrGetHandoverCode = useStore((s) => s.generateOrGetHandoverCode)
 
-  const records = waybillId ? mockTemperatureRecords[waybillId] || [] : []
+  const records = waybill ? mockTemperatureRecords[waybill.id] || [] : []
 
   if (!waybill) {
     return (
-      <div className="max-w-md mx-auto min-h-screen flex items-center justify-center text-slate-400">
-        运单不存在
+      <div className="max-w-md mx-auto min-h-screen flex flex-col items-center justify-center bg-slate-50 px-6">
+        <div className="w-20 h-20 bg-warn-100 rounded-full flex items-center justify-center mb-5">
+          <AlertTriangle className="w-10 h-10 text-warn-500" />
+        </div>
+        <h2 className="text-xl font-semibold text-slate-800 mb-2">交接码无效或已过期</h2>
+        <p className="text-sm text-slate-500 text-center mb-8">
+          请检查交接码是否正确，或联系发货方重新获取
+        </p>
+        <div className="flex gap-3 w-full">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl min-h-[48px] flex items-center justify-center gap-2 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            返回
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            className="flex-1 bg-cold-500 hover:bg-cold-600 text-white font-medium rounded-xl min-h-[48px] flex items-center justify-center gap-2 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            重试
+          </button>
+        </div>
       </div>
     )
   }
@@ -67,6 +94,8 @@ export default function Handover() {
     ['departure', 'anomaly', 'arrival', 'photo'].includes(cp.type)
   )
 
+  const currentHandoverCode = waybill.handoverCode || generateOrGetHandoverCode(waybill.id)
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50">
       <div className="bg-gradient-to-b from-cold-900 to-cold-800 text-white px-4 pt-12 pb-6">
@@ -77,10 +106,8 @@ export default function Handover() {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-lg font-semibold">交接签收</h1>
-          {isReadOnly && (
-            <FileCheck className="w-5 h-5 ml-auto opacity-60" />
-          )}
+          <h1 className="text-lg font-semibold">温度档案查看</h1>
+          {isReadOnly && <FileCheck className="w-5 h-5 ml-auto opacity-60" />}
           {!isReadOnly && (
             <button
               onClick={() => setShowCodeModal(true)}
@@ -89,6 +116,11 @@ export default function Handover() {
               <QrCode className="w-4 h-4" />
             </button>
           )}
+        </div>
+        <div className="mt-4">
+          <span className="inline-flex items-center gap-1.5 bg-white/20 rounded-lg px-3 py-1.5 text-xs font-medium">
+            <span className="font-mono tracking-wider">交接码: {currentHandoverCode}</span>
+          </span>
         </div>
       </div>
 
@@ -126,7 +158,10 @@ export default function Handover() {
             <h2 className="text-sm font-semibold text-slate-700 mb-3">关键节点</h2>
             <div className="space-y-2">
               {keyCheckpoints.map((cp) => (
-                <div key={cp.id} className="flex items-center gap-3 bg-slate-50 rounded-xl px-3 py-2.5">
+                <div
+                  key={cp.id}
+                  className="flex items-center gap-3 bg-slate-50 rounded-xl px-3 py-2.5"
+                >
                   <div className="shrink-0">{checkpointIcons[cp.type]}</div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
@@ -189,7 +224,9 @@ export default function Handover() {
             </div>
             <div className="text-center">
               <p className="text-xs text-slate-400">超温次数</p>
-              <p className={`text-sm font-semibold ${overshootCount > 0 ? 'text-warn-500' : 'text-safe-500'}`}>
+              <p
+                className={`text-sm font-semibold ${overshootCount > 0 ? 'text-warn-500' : 'text-safe-500'}`}
+              >
                 {overshootCount} 次
               </p>
             </div>
@@ -197,14 +234,17 @@ export default function Handover() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4" style={{ maxWidth: 448, margin: '0 auto' }}>
+      <div
+        className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4"
+        style={{ maxWidth: 448, margin: '0 auto' }}
+      >
         <SignOffPanel waybillId={waybill.id} />
       </div>
 
       {showCodeModal && (
         <HandoverCodeModal
           waybillId={waybill.id}
-          handoverCode={generateOrGetHandoverCode(waybill.id)}
+          handoverCode={currentHandoverCode}
           onClose={() => setShowCodeModal(false)}
         />
       )}

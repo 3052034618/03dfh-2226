@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Wifi, WifiOff, Thermometer, ScanLine } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 
@@ -16,15 +16,17 @@ export default function DeviceBindDrawer({ waybillId, onClose }: DeviceBindDrawe
   const [plate, setPlate] = useState('')
   const [deviceId, setDeviceId] = useState('')
 
-  const initialized = waybillId !== null && waybill !== undefined
+  useEffect(() => {
+    if (waybill) {
+      setPlate(waybill.vehiclePlate)
+      setDeviceId(waybill.deviceId)
+    }
+  }, [waybill?.id])
 
-  if (!initialized) return null
-
-  const plateValue = plate || waybill.vehiclePlate
-  const deviceIdValue = deviceId || waybill.deviceId
+  if (!waybillId || !waybill) return null
 
   const handleConfirm = () => {
-    bindDevice(waybill.id, plateValue, deviceIdValue)
+    bindDevice(waybill.id, plate, deviceId)
     onClose()
   }
 
@@ -60,7 +62,7 @@ export default function DeviceBindDrawer({ waybillId, onClose }: DeviceBindDrawe
             <label className="block text-sm font-medium text-slate-700 mb-1.5">车牌号</label>
             <input
               type="text"
-              defaultValue={waybill.vehiclePlate}
+              value={plate}
               onChange={(e) => setPlate(e.target.value)}
               className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-900 focus:border-cold-500 focus:outline-none focus:ring-1 focus:ring-cold-500 min-h-[44px]"
               placeholder="请输入车牌号"
@@ -72,7 +74,7 @@ export default function DeviceBindDrawer({ waybillId, onClose }: DeviceBindDrawe
             <div className="relative">
               <input
                 type="text"
-                defaultValue={waybill.deviceId}
+                value={deviceId}
                 onChange={(e) => setDeviceId(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 pr-10 text-sm text-slate-900 focus:border-cold-500 focus:outline-none focus:ring-1 focus:ring-cold-500 min-h-[44px]"
                 placeholder="请输入或扫码"

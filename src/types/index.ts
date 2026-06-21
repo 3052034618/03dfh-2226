@@ -19,6 +19,7 @@ export interface Waybill {
   tempRange: { min: number; max: number }
   createdAt: string
   updatedAt: string
+  handoverCode?: string
 }
 
 export interface TemperatureRecord {
