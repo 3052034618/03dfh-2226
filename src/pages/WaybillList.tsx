@@ -12,10 +12,20 @@ export default function WaybillList() {
   const bindingWaybillId = useStore((s) => s.bindingWaybillId)
   const setBindingWaybillId = useStore((s) => s.setBindingWaybillId)
   const startTransit = useStore((s) => s.startTransit)
+  const getTemperatureHasOvershoot = useStore((s) => s.getTemperatureHasOvershoot)
+  const getCheckpointsForWaybill = useStore((s) => s.getCheckpointsForWaybill)
 
   const filtered =
     activeStatusFilter === 'all'
       ? waybills
+      : activeStatusFilter === 'anomaly'
+      ? waybills.filter((w) => {
+          if (w.status !== 'completed') return false
+          const hasOvershoot = getTemperatureHasOvershoot(w.id)
+          const checkpoints = getCheckpointsForWaybill(w.id)
+          const hasAnomalyCheckpoint = checkpoints.some((cp) => cp.type === 'anomaly')
+          return hasOvershoot || hasAnomalyCheckpoint
+        })
       : waybills.filter((w) => w.status === activeStatusFilter)
 
   const today = new Date()

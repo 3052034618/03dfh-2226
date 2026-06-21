@@ -269,6 +269,7 @@ export const checkpointTypeLabels: Record<string, string> = {
   photo: '照片记录',
   note: '备注',
   anomaly: '异常上报',
+  processing: '处理记录',
 }
 
 export const statusLabels: Record<string, string> = {

@@ -7,6 +7,7 @@ import {
   Clock,
   MapPin,
   Info,
+  ClipboardList,
 } from 'lucide-react'
 import type { TemperatureRecord, Checkpoint, HandoverRecord } from '@/types'
 import { detectOvershootSections } from '@/utils/anomalyUtils'
@@ -25,6 +26,7 @@ type TraceEventType =
   | 'anomaly'
   | 'photo'
   | 'signoff'
+  | 'processing'
 
 interface TraceEvent {
   id: string
@@ -37,6 +39,8 @@ interface TraceEvent {
   photo?: string
   anomalyReason?: string
   signerName?: string
+  processingNote?: string
+  anomalyRef?: string
 }
 
 function formatDateTime(ts: string) {
@@ -52,6 +56,7 @@ const iconMap: Record<TraceEventType, React.ReactNode> = {
   anomaly: <AlertTriangle size={14} />,
   photo: <Camera size={14} />,
   signoff: <FileCheck size={14} />,
+  processing: <ClipboardList size={14} />,
 }
 
 const dotColorMap: Record<TraceEventType, string> = {
@@ -60,6 +65,7 @@ const dotColorMap: Record<TraceEventType, string> = {
   anomaly: 'bg-warn-500',
   photo: 'bg-cold-500',
   signoff: 'bg-slate-500',
+  processing: 'bg-cold-500',
 }
 
 const labelMap: Record<TraceEventType, string> = {
@@ -68,20 +74,20 @@ const labelMap: Record<TraceEventType, string> = {
   anomaly: '异常上报',
   photo: '现场留证',
   signoff: '签收说明',
+  processing: '处理记录',
 }
 
-export default function AnomalyTrace({
-  waybillId,
-  temperatureRecords,
-  checkpoints,
-  handoverRecord,
-}: AnomalyTraceProps) {
+export default function AnomalyTrace(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  { waybillId, temperatureRecords, checkpoints, handoverRecord }: AnomalyTraceProps
+) {
   const overshootSections = detectOvershootSections(temperatureRecords)
   const anomalyCheckpoints = checkpoints.filter((cp) => cp.type === 'anomaly')
   const photoCheckpoints = checkpoints.filter((cp) => cp.type === 'photo')
+  const processingCheckpoints = checkpoints.filter((cp) => cp.type === 'processing')
 
   const hasAnyAnomaly =
-    overshootSections.length > 0 || anomalyCheckpoints.length > 0
+    overshootSections.length > 0 || anomalyCheckpoints.length > 0 || processingCheckpoints.length > 0
 
   const events: TraceEvent[] = []
 
@@ -127,6 +133,18 @@ export default function AnomalyTrace({
       })
     })
   }
+
+  processingCheckpoints.forEach((cp) => {
+    events.push({
+      id: cp.id,
+      type: 'processing',
+      timestamp: cp.timestamp,
+      location: cp.location,
+      processingNote: cp.processingNote,
+      photo: cp.photo,
+      anomalyRef: cp.anomalyRef,
+    })
+  })
 
   if (handoverRecord && handoverRecord.hasOvershoot && handoverRecord.overshootNote) {
     events.push({
@@ -184,16 +202,17 @@ export default function AnomalyTrace({
         {events.map((event, index) => {
           const { date, time } = formatDateTime(event.timestamp)
           const isLast = index === events.length - 1
+          const isProcessingWithRef = event.type === 'processing' && event.anomalyRef
 
           return (
-            <div key={event.id} className={`relative ${isLast ? '' : 'pb-4'}`}>
+            <div key={event.id} className={`relative ${isLast ? '' : 'pb-4'} ${isProcessingWithRef ? 'ml-2' : ''}`}>
               <div
                 className={`absolute left-[-18px] top-1 w-3.5 h-3.5 rounded-full flex items-center justify-center ${dotColorMap[event.type]}`}
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-white" />
               </div>
 
-              <div className="bg-slate-50 rounded-xl p-3">
+              <div className={`rounded-xl p-3 ${event.type === 'processing' ? 'bg-cold-50' : 'bg-slate-50'}`}>
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className={`${dotColorMap[event.type]} text-white p-1 rounded-md`}>
                     {iconMap[event.type]}
@@ -216,6 +235,12 @@ export default function AnomalyTrace({
                 {event.description && (
                   <p className="text-xs text-slate-600 leading-relaxed">
                     {event.description}
+                  </p>
+                )}
+
+                {event.processingNote && (
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    {event.processingNote}
                   </p>
                 )}
 
@@ -255,19 +280,13 @@ export default function AnomalyTrace({
                   </div>
                 )}
 
-                {event.type === 'photo' && (
+                {(event.type === 'photo' || event.type === 'processing') && event.photo && (
                   <div className="mt-2">
-                    {event.photo ? (
-                      <img
-                        src={event.photo}
-                        alt="现场留证"
-                        className="w-20 h-20 object-cover rounded-lg"
-                      />
-                    ) : (
-                      <div className="w-20 h-20 bg-slate-200 rounded-lg flex items-center justify-center">
-                        <Camera size={20} className="text-slate-400" />
-                      </div>
-                    )}
+                    <img
+                      src={event.photo}
+                      alt={event.type === 'processing' ? '处理照片' : '现场留证'}
+                      className="w-20 h-20 object-cover rounded-lg"
+                    />
                   </div>
                 )}
 

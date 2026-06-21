@@ -1,6 +1,6 @@
 export type WaybillStatus = 'pending' | 'in_transit' | 'completed'
 
-export type CheckpointType = 'photo' | 'note' | 'anomaly' | 'departure' | 'arrival'
+export type CheckpointType = 'photo' | 'note' | 'anomaly' | 'departure' | 'arrival' | 'processing'
 
 export type AnomalyReason = 'door_open' | 'device_shift' | 'insufficient_precool'
 
@@ -39,6 +39,8 @@ export interface Checkpoint {
   photo?: string
   note?: string
   anomalyReason?: AnomalyReason
+  processingNote?: string
+  anomalyRef?: string
 }
 
 export interface HandoverRecord {

@@ -19,10 +19,10 @@ interface AppState {
   checkpoints: Record<string, Checkpoint[]>
   handoverRecords: Record<string, HandoverRecord>
   temperatureRecords: Record<string, TemperatureRecord[]>
-  activeStatusFilter: WaybillStatus | 'all'
+  activeStatusFilter: WaybillStatus | 'all' | 'anomaly'
   bindingWaybillId: string | null
 
-  setActiveStatusFilter: (filter: WaybillStatus | 'all') => void
+  setActiveStatusFilter: (filter: WaybillStatus | 'all' | 'anomaly') => void
   setBindingWaybillId: (id: string | null) => void
   acceptWaybill: (id: string) => void
   bindDevice: (waybillId: string, plate: string, deviceId: string) => void

@@ -5,6 +5,8 @@ interface HandoverChartProps {
   records: TemperatureRecord[]
   tempRange: { min: number; max: number }
   checkpoints: Checkpoint[]
+  highlightTimestamp?: string | null
+  onChartClick?: (timestamp: string) => void
 }
 
 const CHART_HEIGHT = 280
@@ -15,9 +17,10 @@ const CHECKPOINT_COLORS: Record<string, string> = {
   anomaly: '#f97316',
   arrival: '#22c55e',
   photo: '#0ea5e9',
+  processing: '#0ea5e9',
 }
 
-export default function HandoverChart({ records, tempRange, checkpoints }: HandoverChartProps) {
+export default function HandoverChart({ records, tempRange, checkpoints, highlightTimestamp, onChartClick }: HandoverChartProps) {
   if (records.length === 0) return null
 
   const svgWidth = 640
@@ -40,7 +43,7 @@ export default function HandoverChart({ records, tempRange, checkpoints }: Hando
 
   const linePoints = records.map((r, i) => `${mapX(i)},${mapY(r.temperature)}`).join(' ')
 
-  const markerTypes = ['departure', 'anomaly', 'arrival', 'photo']
+  const markerTypes = ['departure', 'anomaly', 'arrival', 'photo', 'processing']
   const markerCheckpoints = checkpoints
     .filter((cp) => markerTypes.includes(cp.type))
     .map((cp) => {
@@ -91,9 +94,49 @@ export default function HandoverChart({ records, tempRange, checkpoints }: Hando
 
   const yTicks = Array.from({ length: 5 }, (_, i) => yMin + (yRange * i) / 4)
 
+  let highlightX: number | null = null
+  if (highlightTimestamp) {
+    const hlTime = new Date(highlightTimestamp).getTime()
+    let closestIdx = 0
+    let closestDist = Infinity
+    records.forEach((r, i) => {
+      const d = Math.abs(new Date(r.timestamp).getTime() - hlTime)
+      if (d < closestDist) {
+        closestDist = d
+        closestIdx = i
+      }
+    })
+    highlightX = mapX(closestIdx)
+  }
+
+  const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!onChartClick || records.length === 0) return
+    const svg = e.currentTarget
+    const rect = svg.getBoundingClientRect()
+    const scaleX = svgWidth / rect.width
+    const clickX = (e.clientX - rect.left) * scaleX
+
+    let nearestIdx = 0
+    let nearestDist = Infinity
+    records.forEach((r, i) => {
+      const x = mapX(i)
+      const d = Math.abs(x - clickX)
+      if (d < nearestDist) {
+        nearestDist = d
+        nearestIdx = i
+      }
+    })
+    onChartClick(records[nearestIdx].timestamp)
+  }
+
   return (
     <div>
-      <svg viewBox={`0 0 ${svgWidth} ${CHART_HEIGHT}`} className="w-full" style={{ height: CHART_HEIGHT }}>
+      <svg
+        viewBox={`0 0 ${svgWidth} ${CHART_HEIGHT}`}
+        className="w-full"
+        style={{ height: CHART_HEIGHT, cursor: onChartClick ? 'pointer' : 'default' }}
+        onClick={handleSvgClick}
+      >
         <rect
           x={PAD.left}
           y={normalTop}
@@ -136,6 +179,28 @@ export default function HandoverChart({ records, tempRange, checkpoints }: Hando
             </text>
           </g>
         ))}
+
+        {highlightX !== null && (
+          <g>
+            <line
+              x1={highlightX}
+              y1={PAD.top - 10}
+              x2={highlightX}
+              y2={PAD.top + plotH}
+              stroke="#ef4444"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+            />
+            <circle
+              cx={highlightX}
+              cy={PAD.top - 10}
+              r={6}
+              fill="#ef4444"
+              stroke="#ffffff"
+              strokeWidth={2}
+            />
+          </g>
+        )}
       </svg>
 
       <div className="flex items-center justify-center gap-4 mt-3 text-xs text-slate-500">

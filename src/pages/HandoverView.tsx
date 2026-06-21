@@ -13,6 +13,7 @@ import {
   QrCode,
   Home,
   Search,
+  Share2,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { checkpointTypeLabels } from '@/data/mock'
@@ -268,6 +269,13 @@ export default function HandoverView() {
           <>
             <SignOffPanel waybillId={waybill.id} />
             <SignOffReceipt waybillId={waybill.id} />
+            <button
+              onClick={() => navigate(`/receipt/${waybill.id}`)}
+              className="w-full bg-gradient-to-r from-cold-500 to-cold-600 hover:from-cold-600 hover:to-cold-700 text-white rounded-xl min-h-[48px] text-sm font-medium flex items-center justify-center gap-2 transition-colors active:from-cold-700 active:to-cold-800 shadow-md"
+            >
+              <Share2 className="w-4 h-4" />
+              查看分享版回执
+            </button>
           </>
         )}
       </div>

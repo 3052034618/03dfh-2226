@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   FileCheck,
   MapPin,
@@ -12,6 +13,8 @@ import {
   ArrowRight,
   CheckCircle2,
   User,
+  ClipboardList,
+  Share2,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { detectOvershootSections } from '@/utils/anomalyUtils'
@@ -22,7 +25,9 @@ interface SignOffReceiptProps {
 }
 
 export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
+  const navigate = useNavigate()
   const [copied, setCopied] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const waybill = useStore((s) => s.getWaybillById(waybillId))
   const checkpoints = useStore((s) => s.getCheckpointsForWaybill(waybillId))
@@ -32,8 +37,9 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
   const records = getTemperatureRecords(waybillId)
   const anomalyCheckpoints = checkpoints.filter((cp) => cp.type === 'anomaly')
   const photoCheckpoints = checkpoints.filter((cp) => cp.type === 'photo')
+  const processingCheckpoints = checkpoints.filter((cp) => cp.type === 'processing')
   const overshootSections = detectOvershootSections(records)
-  const hasAnyAnomaly = overshootSections.length > 0 || anomalyCheckpoints.length > 0
+  const hasAnyAnomaly = overshootSections.length > 0 || anomalyCheckpoints.length > 0 || processingCheckpoints.length > 0
 
   const temps = records.map((r) => r.temperature)
   const minTemp = temps.length > 0 ? Math.min(...temps) : 0
@@ -87,6 +93,7 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
       lines.push(`超温段数：${overshootSections.length} 段`)
       lines.push(`异常上报：${anomalyCheckpoints.length} 次`)
       lines.push(`现场留证：${photoCheckpoints.length} 张`)
+      lines.push(`处理记录：${processingCheckpoints.length} 条`)
       overshootSections.forEach((sec, idx) => {
         const start = new Date(sec.start).toLocaleString('zh-CN')
         const end = new Date(sec.end).toLocaleString('zh-CN')
@@ -99,6 +106,11 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
         lines.push(`  [异常] ${t} - ${reason}`)
         if (cp.location) lines.push(`         地点：${cp.location}`)
         if (cp.note) lines.push(`         说明：${cp.note}`)
+      })
+      processingCheckpoints.forEach((cp) => {
+        const t = new Date(cp.timestamp).toLocaleString('zh-CN')
+        lines.push(`  [处理] ${t}`)
+        if (cp.processingNote) lines.push(`         说明：${cp.processingNote}`)
       })
     }
 
@@ -123,6 +135,21 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
       setTimeout(() => setCopied(false), 2000)
     } catch (e) {
       console.error('copy failed', e)
+    }
+  }
+
+  const handleShare = () => {
+    navigate(`/receipt/${waybillId}`)
+  }
+
+  const handleCopyLink = async () => {
+    try {
+      const link = `${window.location.origin}/receipt/${waybillId}`
+      await navigator.clipboard.writeText(link)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch (e) {
+      console.error('copy link failed', e)
     }
   }
 
@@ -247,7 +274,7 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <div className="bg-warn-50 rounded-lg p-2 text-center border border-warn-100">
                   <p className="text-[10px] text-slate-500">超温段数</p>
                   <p className="text-lg font-bold text-warn-600">{overshootSections.length}</p>
@@ -259,6 +286,10 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
                 <div className="bg-cyan-50 rounded-lg p-2 text-center border border-cyan-100">
                   <p className="text-[10px] text-slate-500">现场留证</p>
                   <p className="text-lg font-bold text-cyan-600">{photoCheckpoints.length}</p>
+                </div>
+                <div className="bg-cold-50 rounded-lg p-2 text-center border border-cold-100">
+                  <p className="text-[10px] text-slate-500">处理记录</p>
+                  <p className="text-lg font-bold text-cold-600">{processingCheckpoints.length}</p>
                 </div>
               </div>
 
@@ -283,7 +314,7 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
                   </div>
                 ))}
 
-                {anomalyCheckpoints.map((cp, idx) => (
+                {anomalyCheckpoints.map((cp) => (
                   <div key={`anom-${cp.id}`} className="bg-warn-50/60 rounded-lg p-2.5 border border-warn-100">
                     <div className="flex items-center gap-2 mb-1.5">
                       <AlertTriangle className="w-4 h-4 text-warn-500 shrink-0" />
@@ -308,6 +339,43 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
                     )}
                   </div>
                 ))}
+
+                {processingCheckpoints.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <ClipboardList className="w-3.5 h-3.5 text-cold-500" />
+                      <span className="text-xs font-semibold text-cold-700">处理记录</span>
+                      {processingCheckpoints.length > 0 && (
+                        <span className="text-[10px] text-slate-400 ml-auto">
+                          最新：{new Date(processingCheckpoints[0].timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                    {processingCheckpoints.map((cp) => (
+                      <div key={`proc-${cp.id}`} className="bg-cold-50/60 rounded-lg p-2.5 border border-cold-100">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <ClipboardList className="w-3.5 h-3.5 text-cold-500 shrink-0" />
+                          <span className="text-xs font-medium text-cold-700">处理记录</span>
+                          <span className="ml-auto text-[10px] text-slate-400">
+                            {new Date(cp.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {cp.processingNote && (
+                          <p className="text-[11px] text-slate-600 leading-relaxed">{cp.processingNote}</p>
+                        )}
+                        {cp.photo && (
+                          <div className="mt-1.5">
+                            <img
+                              src={cp.photo}
+                              alt="处理照片"
+                              className="w-14 h-14 object-cover rounded-lg"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -354,10 +422,33 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
           </p>
         </div>
 
-        <div className="flex gap-2.5 pt-1">
+        <div className="grid grid-cols-2 gap-2.5 pt-1">
+          <button
+            onClick={handleShare}
+            className="bg-cold-500 hover:bg-cold-600 text-white rounded-xl min-h-[42px] text-sm font-medium flex items-center justify-center gap-2 transition-colors active:bg-cold-700"
+          >
+            <Share2 className="w-4 h-4" />
+            分享回执
+          </button>
+          <button
+            onClick={handleCopyLink}
+            className="bg-cold-100 hover:bg-cold-200 text-cold-700 rounded-xl min-h-[42px] text-sm font-medium flex items-center justify-center gap-2 transition-colors active:bg-cold-300"
+          >
+            {linkCopied ? (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                已复制
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                复制链接
+              </>
+            )}
+          </button>
           <button
             onClick={handleCopyReceipt}
-            className="flex-1 bg-cold-700 hover:bg-cold-800 text-white rounded-xl min-h-[42px] text-sm font-medium flex items-center justify-center gap-2 transition-colors active:bg-cold-900"
+            className="bg-cold-700 hover:bg-cold-800 text-white rounded-xl min-h-[42px] text-sm font-medium flex items-center justify-center gap-2 transition-colors active:bg-cold-900"
           >
             {copied ? (
               <>
@@ -373,7 +464,7 @@ export default function SignOffReceipt({ waybillId }: SignOffReceiptProps) {
           </button>
           <button
             onClick={() => alert('请使用系统截图功能保存此回执')}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl min-h-[42px] text-sm font-medium flex items-center justify-center gap-2 transition-colors active:bg-slate-300"
+            className="bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl min-h-[42px] text-sm font-medium flex items-center justify-center gap-2 transition-colors active:bg-slate-300"
           >
             <Camera className="w-4 h-4" />
             截图保存

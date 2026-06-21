@@ -11,26 +11,57 @@ import {
   FileCheck,
   QrCode,
   Camera,
+  ClipboardList,
+  Plus,
 } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import { checkpointTypeLabels } from '@/data/mock'
+import { detectOvershootSections } from '@/utils/anomalyUtils'
 import HandoverChart from '@/components/HandoverChart'
 import SignOffPanel from '@/components/SignOffPanel'
 import HandoverCodeModal from '@/components/HandoverCodeModal'
 import AnomalyTrace from '@/components/AnomalyTrace'
 import SignOffReceipt from '@/components/SignOffReceipt'
+import ProcessingForm from '@/components/ProcessingForm'
+
+type ReviewViewMode = 'process' | 'review'
+
+interface ReviewEvent {
+  id: string
+  timestamp: string
+  type: string
+  title: string
+  description?: string
+  icon: React.ReactNode
+  color: string
+  photo?: string
+}
 
 const checkpointIcons: Record<string, React.ReactNode> = {
   departure: <Truck className="w-4 h-4 text-cold-500" />,
   anomaly: <AlertTriangle className="w-4 h-4 text-warn-500" />,
   arrival: <CheckCircle2 className="w-4 h-4 text-safe-500" />,
   photo: <Camera className="w-4 h-4 text-sky-500" />,
+  processing: <ClipboardList className="w-4 h-4 text-cold-500" />,
+}
+
+const checkpointColors: Record<string, string> = {
+  departure: 'bg-cold-500',
+  anomaly: 'bg-warn-500',
+  arrival: 'bg-safe-500',
+  photo: 'bg-cold-500',
+  processing: 'bg-cold-500',
+  overshoot: 'bg-red-500',
+  signoff: 'bg-slate-500',
 }
 
 export default function Handover() {
   const { waybillId } = useParams<{ waybillId: string }>()
   const navigate = useNavigate()
   const [showCodeModal, setShowCodeModal] = useState(false)
+  const [activeEventTimestamp, setActiveEventTimestamp] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<ReviewViewMode>('process')
+  const [showProcessingForm, setShowProcessingForm] = useState(false)
 
   const waybill = useStore((s) => s.getWaybillById(waybillId || ''))
   const checkpoints = useStore((s) => s.getCheckpointsForWaybill(waybillId || ''))
@@ -73,8 +104,85 @@ export default function Handover() {
   }
 
   const keyCheckpoints = checkpoints.filter((cp) =>
-    ['departure', 'anomaly', 'arrival', 'photo'].includes(cp.type)
+    ['departure', 'anomaly', 'arrival', 'photo', 'processing'].includes(cp.type)
   )
+
+  const overshootSections = detectOvershootSections(records)
+
+  const buildReviewEvents = (): ReviewEvent[] => {
+    const events: ReviewEvent[] = []
+
+    checkpoints.forEach((cp) => {
+      if (!['departure', 'anomaly', 'arrival', 'photo', 'processing'].includes(cp.type)) return
+      events.push({
+        id: cp.id,
+        timestamp: cp.timestamp,
+        type: cp.type,
+        title: checkpointTypeLabels[cp.type],
+        description: cp.processingNote || cp.note || cp.location,
+        icon: checkpointIcons[cp.type],
+        color: checkpointColors[cp.type] || 'bg-slate-400',
+        photo: cp.photo,
+      })
+    })
+
+    overshootSections.forEach((section, idx) => {
+      events.push({
+        id: `overshoot_start_${idx}`,
+        timestamp: section.start,
+        type: 'overshoot',
+        title: `超温开始 #${idx + 1}`,
+        description: `最高 ${section.maxTemp}°C，持续 ${section.durationMin} 分钟`,
+        icon: <Thermometer className="w-4 h-4 text-red-500" />,
+        color: 'bg-red-500',
+      })
+      events.push({
+        id: `overshoot_end_${idx}`,
+        timestamp: section.end,
+        type: 'overshoot',
+        title: `超温结束 #${idx + 1}`,
+        description: `温度恢复正常，持续 ${section.durationMin} 分钟`,
+        icon: <Thermometer className="w-4 h-4 text-safe-500" />,
+        color: 'bg-safe-500',
+      })
+    })
+
+    if (handoverRecord) {
+      events.push({
+        id: 'signoff',
+        timestamp: handoverRecord.signedAt,
+        type: 'signoff',
+        title: '签收完成',
+        description: handoverRecord.signerName + (handoverRecord.overshootNote ? `：${handoverRecord.overshootNote}` : ''),
+        icon: <FileCheck className="w-4 h-4 text-slate-500" />,
+        color: 'bg-slate-500',
+      })
+    }
+
+    events.sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    )
+
+    return events
+  }
+
+  const reviewEvents = buildReviewEvents()
+
+  const handleChartClick = (timestamp: string) => {
+    setActiveEventTimestamp(timestamp)
+  }
+
+  const handleEventClick = (timestamp: string) => {
+    setActiveEventTimestamp(timestamp)
+  }
+
+  const formatEventTime = (ts: string) => {
+    const d = new Date(ts)
+    return {
+      date: `${d.getMonth() + 1}/${d.getDate()}`,
+      time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`,
+    }
+  }
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50">
@@ -122,52 +230,134 @@ export default function Handover() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-700">运输时间线</h2>
+            <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setViewMode('process')}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                  viewMode === 'process'
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-slate-500'
+                }`}
+              >
+                流程视角
+              </button>
+              <button
+                onClick={() => setViewMode('review')}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                  viewMode === 'review'
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-slate-500'
+                }`}
+              >
+                复盘视角
+              </button>
+            </div>
+          </div>
+
+          {viewMode === 'review' && reviewEvents.length > 0 ? (
+            <div className="relative pl-6 max-h-64 overflow-y-auto scrollbar-hide">
+              <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-slate-200" />
+              {reviewEvents.map((event, index) => {
+                const { date, time } = formatEventTime(event.timestamp)
+                const isLast = index === reviewEvents.length - 1
+                const isActive = activeEventTimestamp === event.timestamp
+
+                return (
+                  <div
+                    key={event.id}
+                    className={`relative ${isLast ? '' : 'pb-3'} cursor-pointer`}
+                    onClick={() => handleEventClick(event.timestamp)}
+                  >
+                    <div
+                      className={`absolute left-[-18px] top-1 w-3.5 h-3.5 rounded-full flex items-center justify-center ${event.color} ${
+                        isActive ? 'ring-2 ring-offset-2 ring-cold-400' : ''
+                      }`}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                    </div>
+
+                    <div
+                      className={`rounded-xl p-2.5 transition-colors ${
+                        isActive ? 'bg-cold-50 border-l-4 border-cold-500' : 'bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-slate-700 shrink-0">{event.icon}</span>
+                        <span className="text-xs font-medium text-slate-700">{event.title}</span>
+                        <span className="text-[10px] text-slate-400 ml-auto">
+                          {date} {time}
+                        </span>
+                      </div>
+                      {event.description && (
+                        <p className="text-[11px] text-slate-500 leading-relaxed line-clamp-2 ml-6">
+                          {event.description}
+                        </p>
+                      )}
+                      {event.photo && (
+                        <div className="ml-6 mt-1.5">
+                          <img
+                            src={event.photo}
+                            alt={event.title}
+                            className="w-14 h-14 object-cover rounded-lg"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            keyCheckpoints.length > 0 && (
+              <div className="space-y-2">
+                {keyCheckpoints.filter(cp => cp.type !== 'processing').map((cp) => (
+                  <div key={cp.id} className="flex items-center gap-3 bg-slate-50 rounded-xl px-3 py-2.5">
+                    <div className="shrink-0">{checkpointIcons[cp.type]}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-slate-700">
+                          {checkpointTypeLabels[cp.type]}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          {new Date(cp.timestamp).toLocaleTimeString('zh-CN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 truncate mt-0.5">{cp.location}</p>
+                    </div>
+                    {cp.type === 'photo' && cp.photo && (
+                      <img
+                        src={cp.photo}
+                        alt="照片记录"
+                        className="w-10 h-10 rounded-lg object-cover shrink-0"
+                      />
+                    )}
+                    {cp.type === 'photo' && !cp.photo && (
+                      <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                        <Camera className="w-5 h-5 text-slate-300" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm p-4">
           <h2 className="text-sm font-semibold text-slate-700 mb-3">全程温度回顾</h2>
           <HandoverChart
             records={records}
             tempRange={waybill.tempRange}
             checkpoints={keyCheckpoints}
+            highlightTimestamp={activeEventTimestamp}
+            onChartClick={handleChartClick}
           />
         </div>
-
-        {keyCheckpoints.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm p-4">
-            <h2 className="text-sm font-semibold text-slate-700 mb-3">关键节点</h2>
-            <div className="space-y-2">
-              {keyCheckpoints.map((cp) => (
-                <div key={cp.id} className="flex items-center gap-3 bg-slate-50 rounded-xl px-3 py-2.5">
-                  <div className="shrink-0">{checkpointIcons[cp.type]}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-700">
-                        {checkpointTypeLabels[cp.type]}
-                      </span>
-                      <span className="text-xs text-slate-400">
-                        {new Date(cp.timestamp).toLocaleTimeString('zh-CN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">{cp.location}</p>
-                  </div>
-                  {cp.type === 'photo' && cp.photo && (
-                    <img
-                      src={cp.photo}
-                      alt="照片记录"
-                      className="w-10 h-10 rounded-lg object-cover shrink-0"
-                    />
-                  )}
-                  {cp.type === 'photo' && !cp.photo && (
-                    <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-                      <Camera className="w-5 h-5 text-slate-300" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         <AnomalyTrace
           waybillId={waybill.id}
@@ -221,6 +411,15 @@ export default function Handover() {
         {isReadOnly && (
           <>
             <SignOffPanel waybillId={waybill.id} />
+
+            <button
+              onClick={() => setShowProcessingForm(true)}
+              className="w-full bg-cold-50 text-cold-600 rounded-2xl shadow-sm py-3 px-4 flex items-center justify-center gap-2 text-sm font-medium active:bg-cold-100 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              追加处理记录
+            </button>
+
             <SignOffReceipt waybillId={waybill.id} />
           </>
         )}
@@ -231,6 +430,13 @@ export default function Handover() {
           waybillId={waybill.id}
           handoverCode={generateOrGetHandoverCode(waybill.id)}
           onClose={() => setShowCodeModal(false)}
+        />
+      )}
+
+      {showProcessingForm && (
+        <ProcessingForm
+          waybillId={waybill.id}
+          onClose={() => setShowProcessingForm(false)}
         />
       )}
     </div>

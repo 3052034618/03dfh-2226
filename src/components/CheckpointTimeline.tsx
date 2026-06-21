@@ -1,4 +1,4 @@
-import { Truck, MapPin, AlertTriangle, Camera, FileText, Circle } from 'lucide-react'
+import { Truck, MapPin, AlertTriangle, Camera, FileText, Circle, CheckCircle } from 'lucide-react'
 import type { Checkpoint, CheckpointType, AnomalyReason } from '@/types'
 import { checkpointTypeLabels, anomalyReasonLabels } from '@/data/mock'
 
@@ -8,6 +8,7 @@ const dotColorMap: Record<CheckpointType, string> = {
   anomaly: 'bg-warn-500',
   photo: 'bg-cold-400',
   note: 'bg-slate-400',
+  processing: 'bg-safe-400',
 }
 
 const iconMap: Record<CheckpointType, React.ReactNode> = {
@@ -16,6 +17,7 @@ const iconMap: Record<CheckpointType, React.ReactNode> = {
   anomaly: <AlertTriangle size={14} />,
   photo: <Camera size={14} />,
   note: <FileText size={14} />,
+  processing: <CheckCircle size={14} />,
 }
 
 function formatTime(ts: string) {
