@@ -13,7 +13,7 @@ export function getInitialCheckpoints(waybill: Waybill): Checkpoint[] {
         type: 'note',
         timestamp: waybill.createdAt,
         location: waybill.origin,
-        note: '设备已绑定，装车中，温度正常',
+        note: '设备已绑定，装车确认中，预冷温度正常',
       },
     ]
   }

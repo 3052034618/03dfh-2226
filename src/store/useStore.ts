@@ -70,12 +70,37 @@ export const useStore = create<AppState>()(
         set((state) => {
           const wb = state.waybills.find((w) => w.id === waybillId)
           const code = wb?.handoverCode || generateHandoverCode()
+          const existingCheckpoints = state.checkpoints[waybillId] || []
+          const newCheckpoint = {
+            id: `cp_${Date.now()}`,
+            waybillId,
+            type: 'note' as const,
+            timestamp: new Date().toISOString(),
+            location: wb?.origin || '',
+            note: '设备已绑定，装车确认中，预冷温度正常',
+          }
+          let updatedCheckpoints: Checkpoint[]
+          const pendingBindIndex = existingCheckpoints.findIndex(
+            (cp) => cp.note && cp.note.includes('等待绑定')
+          )
+          if (existingCheckpoints.length === 0) {
+            updatedCheckpoints = [newCheckpoint]
+          } else if (pendingBindIndex >= 0) {
+            updatedCheckpoints = [...existingCheckpoints]
+            updatedCheckpoints[pendingBindIndex] = newCheckpoint
+          } else {
+            updatedCheckpoints = [newCheckpoint, ...existingCheckpoints]
+          }
           return {
             waybills: state.waybills.map((w) =>
               w.id === waybillId
                 ? { ...w, deviceBound: true, vehiclePlate: plate, deviceId, handoverCode: code, updatedAt: new Date().toISOString() }
                 : w
             ),
+            checkpoints: {
+              ...state.checkpoints,
+              [waybillId]: updatedCheckpoints,
+            },
             bindingWaybillId: null,
           }
         }),

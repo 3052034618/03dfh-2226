@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { X, QrCode, Copy, Share2, Check } from 'lucide-react'
+import QRCode from 'qrcode'
 import { useStore } from '@/store/useStore'
 
 interface HandoverCodeModalProps {
@@ -8,53 +9,10 @@ interface HandoverCodeModalProps {
   onClose: () => void
 }
 
-function QrCodePattern({ code }: { code: string }) {
-  const size = 21
-  const cells: boolean[][] = []
-
-  let hash = 0
-  for (let i = 0; i < code.length; i++) {
-    hash = ((hash << 5) - hash) + code.charCodeAt(i)
-    hash |= 0
-  }
-
-  for (let i = 0; i < size; i++) {
-    cells[i] = []
-    for (let j = 0; j < size; j++) {
-      const isCorner =
-        (i < 7 && j < 7) ||
-        (i < 7 && j >= size - 7) ||
-        (i >= size - 7 && j < 7)
-
-      if (isCorner) {
-        const ci = i < 7 ? i : size - 1 - i
-        const cj = j < 7 ? j : size - 1 - j
-        const isOuter = ci === 0 || ci === 6 || cj === 0 || cj === 6
-        const isInner = ci >= 2 && ci <= 4 && cj >= 2 && cj <= 4
-        cells[i][j] = isOuter || isInner
-      } else {
-        const pseudo = Math.abs(Math.sin(i * 7.1 + j * 13.3 + hash * 0.001) * 10000)
-        cells[i][j] = pseudo % 2 === 0
-      }
-    }
-  }
-
-  return (
-    <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full">
-      {cells.map((row, i) =>
-        row.map((filled, j) =>
-          filled ? (
-            <rect key={`${i}-${j}`} x={j} y={i} width={1} height={1} fill="#0f172a" />
-          ) : null
-        )
-      )}
-    </svg>
-  )
-}
-
 export default function HandoverCodeModal({ waybillId, handoverCode: propHandoverCode, onClose }: HandoverCodeModalProps) {
   const [handoverCode, setHandoverCode] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [qrCode, setQrCode] = useState('')
+  const [copied, setCopied] = useState<'link' | 'code' | false>(false)
   const generateOrGetHandoverCode = useStore((s) => s.generateOrGetHandoverCode)
 
   useEffect(() => {
@@ -66,14 +24,25 @@ export default function HandoverCodeModal({ waybillId, handoverCode: propHandove
     }
   }, [waybillId, propHandoverCode, generateOrGetHandoverCode])
 
+  useEffect(() => {
+    if (handoverCode && typeof window !== 'undefined') {
+      const url = `${window.location.origin}/receive/${handoverCode}`
+      QRCode.toDataURL(url, {
+        width: 200,
+        margin: 2,
+        color: { dark: '#0c4a6e', light: '#ffffff' }
+      }).then(dataUrl => setQrCode(dataUrl))
+    }
+  }, [handoverCode])
+
   const fullUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/receive/${handoverCode}`
     : `/receive/${handoverCode}`
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string, type: 'link' | 'code' = 'link') => {
     try {
       await navigator.clipboard.writeText(text)
-      setCopied(true)
+      setCopied(type)
       setTimeout(() => setCopied(false), 2000)
     } catch (error) {
       console.error('Failed to copy:', error)
@@ -117,14 +86,41 @@ export default function HandoverCodeModal({ waybillId, handoverCode: propHandove
 
           <div className="p-6">
             <div className="text-center mb-6">
-              <div className="w-36 h-36 bg-white border-4 border-cold-100 rounded-2xl p-3 mx-auto mb-4">
-                {handoverCode && <QrCodePattern code={handoverCode} />}
+              <div className="w-56 h-56 bg-white border-4 border-cold-900 rounded-2xl p-3 mx-auto mb-4 shadow-lg">
+                {qrCode ? (
+                  <img src={qrCode} alt="交接二维码" className="w-full h-full" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <div className="w-8 h-8 border-4 border-cold-200 border-t-cold-900 rounded-full animate-spin" />
+                  </div>
+                )}
               </div>
-              <p className="text-sm text-slate-500 mb-2">扫码查看</p>
-              <div className="font-mono text-3xl font-bold tracking-widest text-cold-600">
+              <p className="text-sm font-medium text-cold-900 mb-3">扫码查看温度档案</p>
+              <div className="font-mono text-3xl font-bold tracking-widest text-cold-900">
                 {handoverCode}
               </div>
               <div className="text-xs text-slate-400 mt-1">6位交接码</div>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 mb-6">
+              <button
+                onClick={() => copyToClipboard(handoverCode)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-medium transition-colors"
+              >
+                {copied === 'code' ? (
+                  <Check size={14} className="text-safe-500" />
+                ) : (
+                  <Copy size={14} />
+                )}
+                复制交接码
+              </button>
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-1.5 px-4 py-2 bg-cold-50 hover:bg-cold-100 text-cold-700 rounded-xl text-xs font-medium transition-colors"
+              >
+                <Share2 size={14} />
+                分享
+              </button>
             </div>
 
             <div className="bg-slate-50 rounded-xl p-4 mb-6">
@@ -141,7 +137,7 @@ export default function HandoverCodeModal({ waybillId, handoverCode: propHandove
                   className="p-2 text-cold-600 hover:bg-cold-50 rounded-lg transition-colors shrink-0"
                   title="复制链接"
                 >
-                  {copied ? <Check size={18} className="text-safe-500" /> : <Copy size={18} />}
+                  {copied === 'link' ? <Check size={18} className="text-safe-500" /> : <Copy size={18} />}
                 </button>
               </div>
             </div>
@@ -160,7 +156,7 @@ export default function HandoverCodeModal({ waybillId, handoverCode: propHandove
               </button>
               <button
                 onClick={onClose}
-                className="flex-1 bg-cold-500 text-white rounded-xl min-h-[44px] text-sm font-medium active:bg-cold-600 transition-colors"
+                className="flex-1 bg-cold-900 text-white rounded-xl min-h-[44px] text-sm font-medium active:bg-cold-800 transition-colors"
               >
                 关闭
               </button>

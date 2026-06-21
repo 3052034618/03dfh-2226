@@ -20,6 +20,7 @@ import HandoverChart from '@/components/HandoverChart'
 import SignOffPanel from '@/components/SignOffPanel'
 import HandoverCodeModal from '@/components/HandoverCodeModal'
 import AnomalyTrace from '@/components/AnomalyTrace'
+import SignOffReceipt from '@/components/SignOffReceipt'
 
 const checkpointIcons: Record<string, React.ReactNode> = {
   departure: <Truck className="w-4 h-4 text-cold-500" />,
@@ -138,7 +139,7 @@ export default function HandoverView() {
         </div>
       </div>
 
-      <div className="px-4 -mt-4 pb-28 space-y-4">
+      <div className={`px-4 -mt-4 space-y-4 ${isReadOnly ? 'pb-8' : 'pb-28'}`}>
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-cold-600">{waybill.waybillNo}</span>
@@ -253,13 +254,22 @@ export default function HandoverView() {
             </div>
           </div>
         </div>
-      </div>
 
-      <div
-        className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4"
-        style={{ maxWidth: 448, margin: '0 auto' }}
-      >
-        <SignOffPanel waybillId={waybill.id} />
+        {!isReadOnly && (
+          <div
+            className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4"
+            style={{ maxWidth: 448, margin: '0 auto' }}
+          >
+            <SignOffPanel waybillId={waybill.id} />
+          </div>
+        )}
+
+        {isReadOnly && (
+          <>
+            <SignOffPanel waybillId={waybill.id} />
+            <SignOffReceipt waybillId={waybill.id} />
+          </>
+        )}
       </div>
 
       {showCodeModal && (

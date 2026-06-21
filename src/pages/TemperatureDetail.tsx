@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Thermometer, Wifi, WifiOff, ClipboardCheck, QrCode } from 'lucide-react'
+import { ArrowLeft, Plus, Thermometer, Wifi, WifiOff, ClipboardCheck, QrCode, FileCheck, CheckCircle2, Clock, User, AlertTriangle } from 'lucide-react'
 import { useStore } from '@/store/useStore'
 import TemperatureChart from '@/components/TemperatureChart'
 import CheckpointTimeline from '@/components/CheckpointTimeline'
@@ -12,14 +12,17 @@ export default function TemperatureDetail() {
   const navigate = useNavigate()
   const [showForm, setShowForm] = useState(false)
   const [showCodeModal, setShowCodeModal] = useState(false)
+  const [noteExpanded, setNoteExpanded] = useState(false)
 
   const waybill = useStore((s) => s.getWaybillById(waybillId || ''))
   const checkpoints = useStore((s) => s.getCheckpointsForWaybill(waybillId || ''))
   const startTransit = useStore((s) => s.startTransit)
   const generateOrGetHandoverCode = useStore((s) => s.generateOrGetHandoverCode)
   const getTemperatureRecords = useStore((s) => s.getTemperatureRecords)
+  const handoverRecords = useStore((s) => s.handoverRecords)
 
   const tempRecords = waybillId ? getTemperatureRecords(waybillId) : []
+  const handoverRecord = waybillId ? handoverRecords[waybillId] : undefined
 
   useEffect(() => {
     if (waybillId) {
@@ -91,6 +94,15 @@ export default function TemperatureDetail() {
             </button>
           </>
         )}
+        {waybill.status === 'completed' && (
+          <button
+            onClick={() => navigate(`/handover/${waybill.id}`)}
+            className="text-xs bg-white/20 rounded-lg px-3 py-1.5 min-h-[36px] flex items-center gap-1"
+          >
+            <FileCheck size={14} />
+            交接档案
+          </button>
+        )}
       </header>
 
       <div className="flex-1 overflow-y-auto scrollbar-hide pb-20">
@@ -138,6 +150,65 @@ export default function TemperatureDetail() {
           </div>
         </section>
 
+        {waybill.status === 'completed' && handoverRecord && (
+          <section className="px-4 mt-4">
+            <h3 className="text-sm font-medium text-slate-700 mb-3">签收确认</h3>
+            <div className="bg-white rounded-2xl shadow-sm border-l-4 border-safe-500 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 rounded-full bg-safe-500/10 flex items-center justify-center">
+                  <CheckCircle2 size={18} className="text-safe-500" />
+                </div>
+                <span className="text-sm font-medium text-safe-600 bg-safe-500/10 px-2.5 py-0.5 rounded-full">
+                  已签收
+                </span>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  <User size={14} className="text-slate-400" />
+                  <span className="text-slate-500">签收人：</span>
+                  <span className="text-slate-700 font-medium">{handoverRecord.signerName}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock size={14} className="text-slate-400" />
+                  <span className="text-slate-500">签收时间：</span>
+                  <span className="text-slate-700">
+                    {new Date(handoverRecord.signedAt).toLocaleString('zh-CN', {
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              {handoverRecord.hasOvershoot && handoverRecord.overshootNote && (
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle size={14} className="text-warn-500 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <span className="text-xs font-medium text-warn-600">异常说明摘要</span>
+                      <p
+                        className={`text-xs text-slate-600 mt-1 ${noteExpanded ? '' : 'line-clamp-2'}`}
+                      >
+                        {handoverRecord.overshootNote}
+                      </p>
+                      <button
+                        onClick={() => setNoteExpanded(!noteExpanded)}
+                        className="text-xs text-cold-500 mt-1 hover:text-cold-600"
+                      >
+                        {noteExpanded ? '收起' : '展开'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {checkpoints.length > 0 && (
           <section className="px-4 mt-4">
             <h3 className="text-sm font-medium text-slate-700 mb-3">运输记录</h3>
@@ -153,6 +224,18 @@ export default function TemperatureDetail() {
         >
           <Plus size={24} />
         </button>
+      )}
+
+      {waybill.status === 'completed' && (
+        <div className="px-4 pb-4 pt-2 shrink-0 safe-bottom">
+          <button
+            onClick={() => navigate(`/handover/${waybill.id}`)}
+            className="w-full bg-safe-500 text-white rounded-xl min-h-[48px] text-sm font-medium flex items-center justify-center gap-2"
+          >
+            <FileCheck size={18} />
+            查看交接档案
+          </button>
+        </div>
       )}
 
       {waybill.status === 'pending' && waybill.deviceBound && (
